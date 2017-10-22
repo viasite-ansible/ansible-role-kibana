@@ -1,0 +1,23 @@
+---
+- name: configure nginx server
+  include_role:
+    name: nginx
+  vars:
+    nginx_auth_basic_files:
+      kibana:
+        - "{{ kibana_basic_auth }}"
+    # todo: http only
+    nginx_sites:
+      "{{ kibana_nginx_host }}":
+        - listen 80
+        - server_name "{{ kibana_nginx_host }}"
+        - auth_basic "restricted"
+        - auth_basic_user_file "{{ kibana_nginx_basic_user_file }}"
+        - |
+          location / {
+            proxy_pass "http://localhost:{{ kibana_server_port }}";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          }
+  tags: nginx

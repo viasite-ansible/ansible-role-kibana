@@ -22,3 +22,7 @@
     group: root
     mode: 0644
   notify: restart kibana
+
+- name: Configure nginx vhost
+  include: nginx.yml
+  when: kibana_nginx_host is defined
