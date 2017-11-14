@@ -1,23 +1,49 @@
 ---
-- name: configure nginx server
+- name: Define nginx server
+  set_fact:
+    kibana_nginx_server: |
+      server_name "{{ kibana_nginx_host }}";
+      location / {
+        auth_basic "restricted";
+        auth_basic_user_file "{{ kibana_nginx_basic_user_file }}";
+        proxy_pass "http://localhost:{{ kibana_server_port }}";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      }
+
+- name: Configure nginx server (http only)
   include_role:
     name: nginx
   vars:
     nginx_auth_basic_files:
       kibana:
         - "{{ kibana_basic_auth }}"
-    # todo: http only
     nginx_sites:
       "{{ kibana_nginx_host }}":
         - listen 80
-        - server_name "{{ kibana_nginx_host }}"
-        - auth_basic "restricted"
-        - auth_basic_user_file "{{ kibana_nginx_basic_user_file }}"
+        - "{{ kibana_nginx_server }}"
         - |
-          location / {
-            proxy_pass "http://localhost:{{ kibana_server_port }}";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          location ^~ /.well-known/ {
+            root /usr/share/nginx/html;
+            allow all;
           }
-  tags: nginx
+
+  when: not kibana_nginx_ssl_certificate or not kibana_nginx_ssl_certificate_key
+
+- name: Configure nginx server (https)
+  include_role:
+    name: nginx
+  vars:
+    nginx_auth_basic_files:
+      kibana:
+        - "{{ kibana_basic_auth }}"
+    nginx_sites:
+      "{{ kibana_nginx_host }}":
+        - listen 80
+        - listen 443 ssl http2
+        - ssl_certificate {{ kibana_nginx_ssl_certificate }}
+        - ssl_certificate_key {{ kibana_nginx_ssl_certificate_key }}
+        - add_header Strict-Transport-Security "max-age=15768000"
+        - "{{ kibana_nginx_server }}"
+  when: kibana_nginx_ssl_certificate and kibana_nginx_ssl_certificate_key
